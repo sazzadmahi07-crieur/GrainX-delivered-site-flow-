@@ -1,0 +1,845 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grain Marketplace — Trade Flow Prototype</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lucide/0.462.0/umd/lucide.min.js"></script>
+<style>
+  html, body { margin: 0; padding: 16px; background: #f5f7f6; }
+  @media (prefers-color-scheme: dark) { html, body { background: #0f1411; } }
+</style>
+</head>
+<body>
+<div id="gm-app">
+  <div class="gm-toast-wrap" id="gm-toasts" aria-live="polite"></div>
+
+  <header class="gm-topbar">
+    <div class="gm-logo">
+      <span class="gm-logo-mark" aria-hidden="true"><i data-lucide="sprout"></i></span>
+      <span class="gm-logo-text">Grain<br>Marketplace</span>
+      <span class="gm-beta">BETA</span>
+    </div>
+    <nav class="gm-role-tabs" aria-label="Demo role">
+      <button type="button" class="gm-role-tab" data-role="farmer">Farmer</button>
+      <button type="button" class="gm-role-tab" data-role="buyer">Buyer</button>
+      <button type="button" class="gm-role-tab" data-role="admin">Admin</button>
+    </nav>
+    <div class="gm-top-right">
+      <button type="button" class="gm-btn gm-btn-ghost gm-btn-sm" data-nav="flow"><i data-lucide="git-branch"></i> Flow map</button>
+      <button type="button" class="gm-btn gm-btn-ghost gm-btn-sm" id="gm-reset"><i data-lucide="rotate-ccw"></i> Reset demo</button>
+      <button type="button" class="gm-bell" id="gm-bell" aria-label="Notifications">
+        <i data-lucide="bell"></i>
+        <span class="gm-bell-dot" id="gm-bell-dot" hidden></span>
+      </button>
+    </div>
+    <div class="gm-notif-pop" id="gm-notif-pop" hidden aria-label="Notification history">
+      <div class="gm-notif-head">Notifications</div>
+      <div id="gm-notif-list"></div>
+    </div>
+  </header>
+
+  <div class="gm-body" id="gm-main"></div>
+
+  <div class="gm-overlay" id="gm-overlay" hidden>
+    <div class="gm-modal" id="gm-modal" role="dialog" aria-modal="true"></div>
+  </div>
+</div>
+
+<style>
+  #gm-app {
+    --gm-bg: light-dark(#f5f7f6, #0f1411);
+    --gm-surface: light-dark(#ffffff, #18201b);
+    --gm-surface-2: light-dark(#f7f9f8, #1d2620);
+    --gm-border: light-dark(#e3e8e5, #2b352e);
+    --gm-text: light-dark(#1b231f, #e9eeeb);
+    --gm-muted: light-dark(#66726c, #9aa8a0);
+    --gm-green: light-dark(#0d5c40, #37a478);
+    --gm-green-soft: light-dark(#e2f2ea, #14352a);
+    --gm-green-text: light-dark(#0d5c40, #6fcaa3);
+    --gm-amber-bg: light-dark(#fdf3df, #3a2f12);
+    --gm-amber-fg: light-dark(#96660a, #e8ba48);
+    --gm-blue-bg: light-dark(#e8f1fc, #12283e);
+    --gm-blue-fg: light-dark(#1c5da8, #7ab3ef);
+    --gm-green-bg: light-dark(#e2f4ea, #123326);
+    --gm-green-pill: light-dark(#157248, #5fc79a);
+    --gm-orange-bg: light-dark(#fdeee2, #3f2313);
+    --gm-orange-fg: light-dark(#b05a1e, #eda468);
+    --gm-purple-bg: light-dark(#f1eafc, #2b1f45);
+    --gm-purple-fg: light-dark(#6d3fc4, #b795f2);
+    --gm-gray-bg: light-dark(#eef1ef, #232b26);
+    --gm-gray-fg: light-dark(#5a6660, #a8b5ad);
+    --gm-red: light-dark(#b3372e, #e07b72);
+    --gm-red-soft: light-dark(#fbeae8, #3a1d1a);
+
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    color: var(--gm-text);
+    background: var(--gm-bg);
+    border: 1px solid var(--gm-border);
+    border-radius: 14px;
+    overflow: hidden;
+    position: relative;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  #gm-app *, #gm-app *::before, #gm-app *::after { box-sizing: border-box; }
+  #gm-app button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+  #gm-app input, #gm-app textarea {
+    font: inherit; color: var(--gm-text); background: var(--gm-surface);
+    border: 1px solid var(--gm-border); border-radius: 8px; padding: 8px 10px; width: 100%;
+  }
+  #gm-app input:focus, #gm-app textarea:focus { outline: 2px solid var(--gm-green); outline-offset: 1px; }
+  #gm-app svg { width: 16px; height: 16px; flex: none; }
+
+  /* ---------- top bar ---------- */
+  .gm-topbar {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    padding: 10px 16px; background: var(--gm-surface); border-bottom: 1px solid var(--gm-border);
+    position: relative;
+  }
+  .gm-logo { display: flex; align-items: center; gap: 8px; }
+  .gm-logo-mark {
+    width: 30px; height: 30px; border-radius: 8px; background: var(--gm-green);
+    color: #fff; display: flex; align-items: center; justify-content: center;
+  }
+  .gm-logo-text { font-size: 12px; font-weight: 500; line-height: 1.15; }
+  .gm-beta {
+    font-size: 10px; font-weight: 500; color: var(--gm-green-text);
+    background: var(--gm-green-soft); border-radius: 4px; padding: 1px 5px;
+  }
+  .gm-role-tabs { display: flex; gap: 4px; background: var(--gm-surface-2); border: 1px solid var(--gm-border); border-radius: 10px; padding: 3px; }
+  .gm-role-tab { padding: 6px 16px; border-radius: 7px; font-weight: 500; color: var(--gm-muted); }
+  .gm-role-tab.active { background: var(--gm-green); color: #fff; }
+  .gm-top-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .gm-bell { position: relative; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 1px solid var(--gm-border); background: var(--gm-surface); }
+  .gm-bell-dot { position: absolute; top: 5px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--gm-red); border: 2px solid var(--gm-surface); }
+  .gm-notif-pop {
+    position: absolute; top: 52px; right: 14px; width: 340px; max-width: calc(100% - 28px);
+    background: var(--gm-surface); border: 1px solid var(--gm-border); border-radius: 12px;
+    box-shadow: 0 12px 32px light-dark(rgba(15,25,20,.14), rgba(0,0,0,.5)); z-index: 40; overflow: hidden;
+  }
+  .gm-notif-head { padding: 10px 14px; font-weight: 500; border-bottom: 1px solid var(--gm-border); }
+  .gm-notif-item { padding: 10px 14px; border-bottom: 1px solid var(--gm-border); display: flex; gap: 9px; }
+  .gm-notif-item:last-child { border-bottom: none; }
+  .gm-notif-item.unread { background: var(--gm-green-soft); }
+  .gm-notif-item b { display: block; font-weight: 500; }
+  .gm-notif-item .gm-time { color: var(--gm-muted); font-size: 12px; }
+  .gm-notif-item svg { color: var(--gm-green-text); margin-top: 2px; }
+  .gm-notif-empty { padding: 18px 14px; color: var(--gm-muted); text-align: center; }
+
+  /* ---------- buttons ---------- */
+  .gm-btn {
+    display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px;
+    border-radius: 8px; background: var(--gm-green); color: #fff; font-weight: 500;
+  }
+  .gm-btn:hover { filter: brightness(1.08); }
+  .gm-btn-ghost { background: transparent; color: var(--gm-text); border: 1px solid var(--gm-border); }
+  .gm-btn-ghost:hover { filter: none; background: var(--gm-surface-2); }
+  .gm-btn-danger { background: transparent; color: var(--gm-red); border: 1px solid var(--gm-border); }
+  .gm-btn-danger:hover { filter: none; background: var(--gm-red-soft); }
+  .gm-btn-sm { padding: 6px 11px; font-size: 13px; }
+
+  /* ---------- layout ---------- */
+  .gm-body { min-height: 420px; }
+  .gm-content { padding: 18px 20px 26px; }
+  .gm-with-side { display: flex; min-height: 460px; }
+  .gm-side {
+    width: 190px; flex: none; background: var(--gm-surface); border-right: 1px solid var(--gm-border);
+    padding: 14px 10px; display: flex; flex-direction: column; gap: 2px;
+  }
+  .gm-side-label { font-size: 11px; letter-spacing: .06em; color: var(--gm-muted); padding: 8px 10px 3px; }
+  .gm-side-item { display: flex; align-items: center; gap: 9px; padding: 7px 10px; border-radius: 8px; color: var(--gm-muted); text-align: left; }
+  .gm-side-item.active { background: var(--gm-green-soft); color: var(--gm-green-text); font-weight: 500; }
+  .gm-main-col { flex: 1; min-width: 0; }
+
+  .gm-back { display: inline-flex; align-items: center; gap: 6px; color: var(--gm-muted); padding: 0; margin-bottom: 6px; }
+  .gm-h1 { font-size: 22px; font-weight: 500; margin: 0 0 12px; }
+  .gm-h2 { font-size: 15px; font-weight: 500; margin: 0 0 4px; }
+
+  .gm-tip {
+    display: flex; gap: 9px; align-items: flex-start; padding: 10px 13px; margin-bottom: 16px;
+    border-radius: 10px; background: var(--gm-green-soft); color: var(--gm-green-text); font-size: 13px;
+  }
+  .gm-tip svg { margin-top: 1px; }
+
+  .gm-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--gm-border); margin-bottom: 18px; flex-wrap: wrap; }
+  .gm-tab { padding: 9px 14px; color: var(--gm-muted); border-bottom: 2px solid transparent; margin-bottom: -1px; font-weight: 500; }
+  .gm-tab.active { color: var(--gm-green-text); border-bottom-color: var(--gm-green); }
+
+  /* ---------- table ---------- */
+  .gm-table-wrap { overflow-x: auto; border: 1px solid var(--gm-border); border-radius: 12px; background: var(--gm-surface); }
+  .gm-table { width: 100%; border-collapse: collapse; min-width: 860px; }
+  .gm-table th {
+    text-align: left; font-size: 12px; font-weight: 500; color: var(--gm-muted);
+    padding: 10px 12px; border-bottom: 1px solid var(--gm-border); white-space: nowrap;
+  }
+  .gm-table td { padding: 11px 12px; border-bottom: 1px solid var(--gm-border); white-space: nowrap; font-size: 13.5px; }
+  .gm-table tr:last-child td { border-bottom: none; }
+  .gm-table tr.gm-row-active { cursor: pointer; }
+  .gm-table tr.gm-row-active:hover { background: var(--gm-surface-2); }
+  .gm-num { text-align: right; font-variant-numeric: tabular-nums; }
+  .gm-dots { color: var(--gm-muted); }
+
+  .gm-badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 12.5px; white-space: nowrap; }
+  .gm-badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .gm-badge.amber { background: var(--gm-amber-bg); color: var(--gm-amber-fg); }
+  .gm-badge.blue { background: var(--gm-blue-bg); color: var(--gm-blue-fg); }
+  .gm-badge.green { background: var(--gm-green-bg); color: var(--gm-green-pill); }
+  .gm-badge.orange { background: var(--gm-orange-bg); color: var(--gm-orange-fg); }
+  .gm-badge.purple { background: var(--gm-purple-bg); color: var(--gm-purple-fg); }
+  .gm-badge.gray { background: var(--gm-gray-bg); color: var(--gm-gray-fg); }
+
+  /* ---------- stepper ---------- */
+  .gm-steps { margin: 4px 0 20px; }
+  .gm-step { position: relative; padding: 0 0 22px 36px; }
+  .gm-step::before { content: ''; position: absolute; left: 11px; top: 26px; bottom: 2px; width: 2px; background: var(--gm-border); }
+  .gm-step:last-child { padding-bottom: 4px; }
+  .gm-step:last-child::before { display: none; }
+  .gm-step-dot {
+    position: absolute; left: 0; top: 1px; width: 24px; height: 24px; border-radius: 50%;
+    border: 2px solid var(--gm-border); background: var(--gm-surface);
+    display: flex; align-items: center; justify-content: center; color: #fff;
+  }
+  .gm-step.done .gm-step-dot { background: var(--gm-green); border-color: var(--gm-green); }
+  .gm-step.active .gm-step-dot { border-color: var(--gm-green); }
+  .gm-step.active .gm-step-dot::after { content: ''; width: 10px; height: 10px; border-radius: 50%; background: var(--gm-green); }
+  .gm-step-title { font-weight: 500; }
+  .gm-step.active .gm-step-title { color: var(--gm-green-text); }
+  .gm-step.pending .gm-step-title { color: var(--gm-muted); }
+  .gm-step-desc { color: var(--gm-muted); font-size: 13px; margin-top: 1px; }
+
+  /* ---------- cards & panels ---------- */
+  .gm-card { background: var(--gm-surface); border: 1px solid var(--gm-border); border-radius: 12px; padding: 16px; margin-bottom: 14px; max-width: 640px; }
+  .gm-card.warn { border-color: light-dark(#eec98f, #5a4416); background: var(--gm-amber-bg); }
+  .gm-card.ok { border-color: light-dark(#9fd4b9, #1d4a37); background: var(--gm-green-soft); }
+  .gm-card.err { border-color: light-dark(#e5aaa4, #57261f); background: var(--gm-red-soft); }
+  .gm-card-head { display: flex; align-items: center; gap: 9px; margin-bottom: 6px; }
+  .gm-card-head svg { color: var(--gm-green-text); }
+  .gm-kv { display: flex; gap: 8px; font-size: 13.5px; padding: 2px 0; }
+  .gm-kv b { font-weight: 500; min-width: 118px; color: var(--gm-muted); }
+  .gm-kv-row { display: flex; gap: 26px; flex-wrap: wrap; margin: 10px 0 2px; }
+  .gm-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 13px; }
+  .gm-chip { display: inline-block; font-size: 12px; background: var(--gm-surface-2); border: 1px solid var(--gm-border); border-radius: 6px; padding: 2px 8px; }
+
+  .gm-panel { background: var(--gm-surface); border: 1px solid var(--gm-border); border-radius: 12px; max-width: 480px; margin-bottom: 14px; overflow: hidden; }
+  .gm-panel-head { padding: 11px 15px; font-weight: 500; background: var(--gm-surface-2); border-bottom: 1px solid var(--gm-border); }
+  .gm-panel-body { padding: 14px 15px; }
+  .gm-fee-row { display: flex; gap: 10px; align-items: center; }
+  .gm-fee-row input { max-width: 200px; }
+  .gm-note { color: var(--gm-muted); font-size: 12.5px; margin-top: 8px; }
+  .gm-rcti-line { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13.5px; }
+  .gm-rcti-line.total { border-top: 1px solid var(--gm-border); margin-top: 6px; padding-top: 9px; font-weight: 500; }
+  .gm-mini-badge { font-size: 11.5px; border-radius: 5px; padding: 1px 7px; white-space: nowrap; }
+  .gm-mini-badge.warnc { background: var(--gm-amber-bg); color: var(--gm-amber-fg); }
+  .gm-mini-badge.okc { background: var(--gm-green-bg); color: var(--gm-green-pill); }
+
+  /* ---------- log ---------- */
+  .gm-log { margin-top: 4px; }
+  .gm-log-item { display: flex; gap: 10px; padding: 7px 0; border-bottom: 1px dashed var(--gm-border); font-size: 13px; }
+  .gm-log-item:last-child { border-bottom: none; }
+  .gm-log-item svg { color: var(--gm-muted); margin-top: 2px; }
+  .gm-log-item .gm-time { margin-left: auto; color: var(--gm-muted); white-space: nowrap; }
+
+  /* ---------- flow map ---------- */
+  .gm-flow { max-width: 640px; }
+  .gm-flow-node {
+    background: var(--gm-surface); border: 1px solid var(--gm-border); border-radius: 12px;
+    padding: 13px 15px; display: flex; gap: 12px; align-items: flex-start;
+  }
+  .gm-flow-arrow { display: flex; align-items: center; gap: 8px; padding: 5px 0 5px 22px; color: var(--gm-muted); font-size: 12.5px; }
+  .gm-flow-arrow svg { color: var(--gm-green-text); }
+  .gm-flow-actor { font-size: 12.5px; color: var(--gm-muted); margin-top: 4px; }
+  .gm-flow-actor b { color: var(--gm-text); font-weight: 500; }
+  .gm-flow-reject { margin: 2px 0 2px 22px; padding: 8px 12px; border-radius: 10px; background: var(--gm-red-soft); color: var(--gm-red); font-size: 12.5px; display: flex; gap: 8px; align-items: center; }
+
+  /* ---------- modal & toasts ---------- */
+  .gm-overlay {
+    position: absolute; inset: 0; background: light-dark(rgba(20,28,24,.42), rgba(0,0,0,.6));
+    display: flex; align-items: center; justify-content: center; z-index: 60; padding: 20px;
+  }
+  .gm-overlay[hidden] { display: none; }
+  .gm-modal { background: var(--gm-surface); border: 1px solid var(--gm-border); border-radius: 14px; width: 440px; max-width: 100%; padding: 20px; box-shadow: 0 18px 44px rgba(0,0,0,.25); }
+  .gm-modal h3 { margin: 0 0 6px; font-size: 16px; font-weight: 500; }
+  .gm-modal .gm-note { margin: 0 0 12px; }
+  .gm-modal label { display: block; font-size: 13px; color: var(--gm-muted); margin: 10px 0 5px; }
+  .gm-toast-wrap { position: absolute; top: 58px; right: 14px; z-index: 80; display: flex; flex-direction: column; gap: 8px; width: 320px; max-width: calc(100% - 28px); }
+  .gm-toast {
+    display: flex; gap: 9px; background: var(--gm-surface); border: 1px solid var(--gm-border);
+    border-left: 3px solid var(--gm-green); border-radius: 10px; padding: 11px 13px;
+    box-shadow: 0 10px 26px light-dark(rgba(15,25,20,.16), rgba(0,0,0,.5)); font-size: 13px;
+  }
+  .gm-toast svg { color: var(--gm-green-text); margin-top: 1px; }
+  .gm-toast b { display: block; font-weight: 500; }
+  .gm-toast span { color: var(--gm-muted); }
+  .gm-label { display: block; font-size: 12.5px; color: var(--gm-muted); margin-bottom: 4px; }
+</style>
+
+<script>
+(function () {
+  var app = document.getElementById('gm-app');
+  var STATUS = {
+    PENDING_TITLE_TRANSFER: { label: 'Pending Title Transfer', cls: 'amber' },
+    TITLE_UNDER_REVIEW:     { label: 'Title Transfer Under Review', cls: 'blue' },
+    PENDING_PAYMENT:        { label: 'Pending Payment', cls: 'orange' },
+    PAYMENT_UNDER_REVIEW:   { label: 'Payment Under Review', cls: 'blue' },
+    PAYMENT_RECEIVED:       { label: 'Payment Received', cls: 'purple' },
+    COMPLETED:              { label: 'Completed', cls: 'green' }
+  };
+  var ROLE_NAME = { farmer: 'Hargreaves Family Farms (Seller)', buyer: 'Mitchell Grain Traders', admin: 'Grain Marketplace Admin' };
+  var SALE = { id: 'TRD0495', grain: 'BAR1 Alestar (Barley)', qty: '200.00 MT', price: '$300.00/MT', total: 60000, totalFmt: '$60,000.00', season: '2025/26', conveyance: 'Delivered Site' };
+  var STEPS = [
+    { title: 'Confirm your sale', desc: 'Farmer and buyer matched — the order is locked in.' },
+    { title: 'Transfer the grain ownership', desc: 'Farmer transfers the title to GrainX and submits the reference number.' },
+    { title: 'Validate the title transfer', desc: 'Admin manually validates the GrainX reference.' },
+    { title: 'Pay the RCTI', desc: 'Buyer reviews the RCTI and transfers the payment.' },
+    { title: 'Verify the payment', desc: 'Admin checks the received payment and marks it as received.' },
+    { title: 'Receive the payment — trade complete', desc: 'Farmer confirms the money arrived. Trade completed.' }
+  ];
+  var STEP_INDEX = {
+    PENDING_TITLE_TRANSFER: 1, TITLE_UNDER_REVIEW: 2, PENDING_PAYMENT: 3,
+    PAYMENT_UNDER_REVIEW: 4, PAYMENT_RECEIVED: 5, COMPLETED: 6
+  };
+  var STATIC_ROWS = [
+    ['TRD0494', 'BAR1 Ace (Barley)', 'Pending Payment', 'amber', 'Delivered Site', '200.00 MT', '$300.00/MT', '$60,000.00'],
+    ['TRD0493', 'BAR2 Alestar (Barley)', 'Completed', 'green', 'Free In Store', '300.00 MT', '$200.00/MT', '$60,000.00'],
+    ['TRD0492', 'BAR2 Alestar (Barley)', 'Completed', 'green', 'Delivered Site', '200.00 MT', '$300.00/MT', '$60,000.00'],
+    ['TRD0491', 'BAR1 Alestar (Barley)', 'Pending Delivery', 'gray', 'Delivered Site', '400.00 MT', '$300.00/MT', '$120,000.00'],
+    ['TRD0490', 'BAR1 Atlantis (Barley)', 'Pending Payment', 'amber', 'Delivered Site', '100.00 MT', '$240.00/MT', '$24,000.00'],
+    ['TRD0489', 'BAR1 Alestar (Barley)', 'Pending Agreement', 'blue', 'Ex Farm', '300.00 MT', '$80.00/MT', '$24,000.00'],
+    ['TRD0488', 'BAR1 Alestar (Barley)', 'Completed', 'green', 'Delivered Site', '100.00 MT', '$200.00/MT', '$20,000.00']
+  ];
+
+  var state = {
+    role: 'farmer',
+    view: 'list',
+    detailTab: 'status',
+    notifOpen: false,
+    lastRead: { farmer: 0, buyer: 0, admin: 0 },
+    notifId: 1,
+    trade: {
+      status: 'PENDING_TITLE_TRANSFER',
+      titleRef: null,
+      titleRejection: null,
+      storageFee: null,
+      paymentRef: null,
+      log: [{ icon: 'check-circle-2', t: 'Order confirmed', d: 'Farmer and buyer matched. Push + in-app notification sent to both.', time: '2 days ago' }]
+    },
+    notifs: [{ id: 0, roles: ['farmer', 'buyer'], title: 'Order Confirmed', body: 'The order for Barley - 200.00 MT is now locked in. Title transfer is required to proceed.', time: '2 days ago' }]
+  };
+
+  /* ---------- restore / persist ---------- */
+  try {
+    var saved = window.zcode && window.zcode.widgetState && window.zcode.widgetState.privateContent;
+    if (saved && saved.trade && STATUS[saved.trade.status]) {
+      state.trade = saved.trade; state.role = saved.role || 'farmer';
+    }
+  } catch (e) {}
+  function persist() {
+    try {
+      window.zcode && window.zcode.setWidgetState && window.zcode.setWidgetState({
+        modelContent: { tradeId: SALE.id, status: state.trade.status },
+        privateContent: { role: state.role, trade: state.trade }
+      });
+    } catch (e) {}
+  }
+
+  /* ---------- helpers ---------- */
+  function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  function icon(name) { return '<i data-lucide="' + name + '" aria-hidden="true"></i>'; }
+  function badge(s) { var m = STATUS[s]; return '<span class="gm-badge ' + m.cls + '">' + m.label + '</span>'; }
+
+  function notify(roles, title, body) {
+    state.notifs.unshift({ id: state.notifId++, roles: roles, title: title, body: body, time: 'Just now' });
+    if (roles.indexOf(state.role) !== -1) toast(title, body);
+  }
+  function logEvent(t, d) { state.trade.log.unshift({ icon: 'circle-check', t: t, d: d, time: 'Just now' }); }
+  function toast(title, body) {
+    var wrap = document.getElementById('gm-toasts');
+    var el = document.createElement('div');
+    el.className = 'gm-toast';
+    el.innerHTML = icon('bell-ring') + '<div><b>' + esc(title) + '</b><span>' + esc(body) + '</span></div>';
+    wrap.appendChild(el);
+    if (window.lucide) lucide.createIcons({ attrs: { width: 16, height: 16 } });
+    setTimeout(function () { el.remove(); }, 4200);
+  }
+  function unreadCount() {
+    var n = 0;
+    state.notifs.forEach(function (x) { if (x.roles.indexOf(state.role) !== -1 && x.id > state.lastRead[state.role]) n++; });
+    return n;
+  }
+
+  /* ---------- actions (state machine) ---------- */
+  var actions = {
+    submitTitleRef: function (ref) {
+      state.trade.titleRef = ref; state.trade.titleRejection = null;
+      state.trade.status = 'TITLE_UNDER_REVIEW';
+      logEvent('Title transfer submitted', 'Farmer submitted GrainX reference ' + ref + '.');
+      notify(['farmer'], 'Reference submitted', 'GrainX reference ' + ref + ' received. The admin is validating your title transfer.');
+      notify(['admin'], 'Title transfer submitted', SALE.id + ': farmer submitted GrainX reference ' + ref + '. Please validate it manually.');
+      after();
+    },
+    validateTitle: function () {
+      state.trade.status = 'PENDING_PAYMENT';
+      logEvent('Title transfer validated', 'Admin validated the GrainX reference. Status moved to Pending Payment for both sides.');
+      notify(['farmer', 'buyer'], 'Title transfer validated', 'Ownership transfer was verified by admin. The trade is now in Pending Payment.');
+      after();
+    },
+    rejectTitle: function (reason) {
+      state.trade.titleRejection = reason; state.trade.titleRef = null;
+      state.trade.status = 'PENDING_TITLE_TRANSFER';
+      logEvent('Title transfer rejected', 'Admin rejected the reference: ' + reason);
+      notify(['farmer'], 'Title transfer rejected', reason + ' Please re-submit a valid GrainX reference number.');
+      after();
+    },
+    saveStorageFee: function (fee) {
+      state.trade.storageFee = fee;
+      logEvent('Storage fee saved', 'Admin added the accumulated storage fee (' + fmtMoney(fee) + '). RCTI unlocked on the buyer side.');
+      notify(['buyer'], 'RCTI ready to pay', 'The RCTI for ' + SALE.id + ' is ready. Amount payable: ' + SALE.totalFmt + '. Review and transfer the payment.');
+      after();
+    },
+    submitPayment: function (ref) {
+      state.trade.paymentRef = ref;
+      state.trade.status = 'PAYMENT_UNDER_REVIEW';
+      logEvent('Payment submitted', 'Buyer transferred ' + SALE.totalFmt + ' and submitted payment reference ' + ref + '.');
+      notify(['buyer'], 'Payment submitted', 'Reference ' + ref + ' received. Admin is verifying your payment (request for check).');
+      notify(['admin'], 'Request for check', SALE.id + ': buyer payment of ' + SALE.totalFmt + ' (ref ' + ref + ') needs verification.');
+      after();
+    },
+    verifyPayment: function () {
+      state.trade.status = 'PAYMENT_RECEIVED';
+      logEvent('Payment verified & received', 'Admin verified the payment and marked it as received.');
+      notify(['buyer'], 'Payment verified', 'Admin confirmed receipt of ' + SALE.totalFmt + '. Waiting for the farmer to confirm.');
+      notify(['farmer'], 'Payment received by admin', 'Admin has received the buyer payment of ' + SALE.totalFmt + '. Confirm once the money reaches your account.');
+      after();
+    },
+    confirmReceipt: function () {
+      state.trade.status = 'COMPLETED';
+      logEvent('Trade completed', 'Farmer confirmed the payment received. Trade completed.');
+      notify(['farmer', 'buyer', 'admin'], 'Trade completed', SALE.id + ' is fully settled — title transferred, payment verified and received.');
+      after();
+    },
+    reset: function () {
+      state.trade = { status: 'PENDING_TITLE_TRANSFER', titleRef: null, titleRejection: null, storageFee: null, paymentRef: null,
+        log: [{ icon: 'check-circle-2', t: 'Order confirmed', d: 'Farmer and buyer matched. Push + in-app notification sent to both.', time: '2 days ago' }] };
+      state.view = 'list'; state.detailTab = 'status';
+      after();
+    }
+  };
+  function after() { state.notifOpen = false; persist(); render(); }
+
+  function fmtMoney(v) {
+    return '$' + Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  /* ---------- render: shell ---------- */
+  function render() {
+    Array.prototype.forEach.call(app.querySelectorAll('[data-role]'), function (b) {
+      b.classList.toggle('active', b.getAttribute('data-role') === state.role);
+    });
+    var dot = document.getElementById('gm-bell-dot');
+    var u = unreadCount();
+    dot.hidden = u === 0;
+    dot.setAttribute('data-tooltip', u + ' unread notification' + (u === 1 ? '' : 's'));
+    renderNotifPop();
+    renderMain();
+    if (window.lucide) lucide.createIcons({ attrs: { width: 16, height: 16 } });
+  }
+
+  function renderNotifPop() {
+    var pop = document.getElementById('gm-notif-pop');
+    pop.hidden = !state.notifOpen;
+    if (!state.notifOpen) return;
+    var html = '';
+    if (!state.notifs.length) html = '<div class="gm-notif-empty">No notifications yet.</div>';
+    state.notifs.forEach(function (n) {
+      var mine = n.roles.indexOf(state.role) !== -1;
+      if (!mine) return;
+      html += '<div class="gm-notif-item' + (n.id > state.lastRead[state.role] ? ' unread' : '') + '">'
+        + icon('message-square-text')
+        + '<div><b>' + esc(n.title) + '</b><span class="gm-time">' + esc(n.body) + ' · ' + n.time + '</span></div></div>';
+    });
+    document.getElementById('gm-notif-list').innerHTML = html || '<div class="gm-notif-empty">Nothing for this role yet.</div>';
+  }
+
+  function renderMain() {
+    var m = document.getElementById('gm-main');
+    if (state.view === 'flow') { m.innerHTML = flowView(); return; }
+    if (state.view === 'detail') { m.innerHTML = detailView(); return; }
+    m.innerHTML = listView();
+  }
+
+  /* ---------- views ---------- */
+  function listView() {
+    var rows = '';
+    var dyn = '<tr class="gm-row-active" data-open="1"><td><b>' + SALE.id + '</b></td><td>' + SALE.grain + '</td>'
+      + '<td>' + ROLE_NAME.farmer.replace(' (Seller)', '') + '</td><td>Mitchell Grain Traders</td><td>' + SALE.season + '</td>'
+      + '<td>' + badge(state.trade.status) + '</td><td>' + SALE.conveyance + '</td>'
+      + '<td class="gm-num">' + SALE.qty + '</td><td class="gm-num">' + SALE.price + '</td><td class="gm-num">' + SALE.totalFmt + '</td>'
+      + '<td class="gm-dots">' + icon('more-vertical') + '</td></tr>';
+    STATIC_ROWS.forEach(function (r) {
+      rows += '<tr><td><b>' + r[0] + '</b></td><td>' + r[1] + '</td><td>Hargreaves Family Farms</td><td>Mitchell Grain Traders</td>'
+        + '<td>2025/26</td><td><span class="gm-badge ' + r[3] + '">' + r[2] + '</span></td><td>' + r[4] + '</td>'
+        + '<td class="gm-num">' + r[5] + '</td><td class="gm-num">' + r[6] + '</td><td class="gm-num">' + r[7] + '</td>'
+        + '<td class="gm-dots">' + icon('more-vertical') + '</td></tr>';
+    });
+    var tip = {
+      farmer: 'Demo: open <b>TRD0495</b> and submit the GrainX reference number to move the trade forward.',
+      buyer: 'Demo: open <b>TRD0495</b>. While the title is not transferred yet, you have no action — switch to Farmer/Admin to progress, then come back to pay the RCTI.',
+      admin: 'Demo: open <b>TRD0495</b> to validate the title transfer, set the storage fee and verify the buyer payment.'
+    }[state.role];
+
+    return '<div class="' + (state.role === 'admin' ? 'gm-with-side' : '') + '">'
+      + (state.role === 'admin' ? adminSidebar() : '')
+      + '<div class="gm-main-col"><div class="gm-content">'
+      + '<div class="gm-tip">' + icon('info') + '<div>' + tip + ' Roles are switchable in the top bar — statuses update live everywhere.</div></div>'
+      + '<h1 class="gm-h1">Sales</h1>'
+      + '<div class="gm-table-wrap"><table class="gm-table"><thead><tr>'
+      + '<th>Track ID</th><th>Grain</th><th>Seller / Farmer</th><th>Buyer</th><th>Season</th><th>Status</th><th>Conveyance</th><th>Quantity Sold</th><th>Final Price</th><th>Total</th><th></th>'
+      + '</tr></thead><tbody>' + dyn + rows + '</tbody></table></div>'
+      + '</div></div></div>';
+  }
+
+  function adminSidebar() {
+    var items = [['sprout', 'Offers'], ['gavel', 'Bids'], ['receipt-text', 'Sales', true], ['users', 'Farmers'], ['user-check', 'Buyers'], ['user-cog', 'Agents'], ['clipboard-check', 'Farmer Approvals']];
+    var over = [['message-square-text', 'Feedback'], ['shield-check', 'Audit Log'], ['line-chart', 'Live Market']];
+    function grp(label, arr) {
+      return '<div class="gm-side-label">' + label + '</div>' + arr.map(function (i) {
+        return '<div class="gm-side-item' + (i[2] ? ' active' : '') + '">' + icon(i[0]) + i[1] + '</div>';
+      }).join('');
+    }
+    return '<aside class="gm-side" aria-label="Admin navigation">' + grp('MARKETPLACE', items) + grp('OVERSIGHT', over) + '</aside>';
+  }
+
+  function detailView() {
+    var tabs = '<div class="gm-tabs" role="tablist" aria-label="Sale detail sections">'
+      + tabBtn('details', 'Details') + tabBtn('status', 'Transaction Status')
+      + (state.role === 'admin' ? tabBtn('storage', 'Storage &amp; Payment') : '')
+      + '</div>';
+    var body = state.detailTab === 'details' ? detailsTab() : state.detailTab === 'storage' ? storageTab() : statusTab();
+    return '<div class="' + (state.role === 'admin' ? 'gm-with-side' : '') + '">'
+      + (state.role === 'admin' ? adminSidebar() : '')
+      + '<div class="gm-main-col"><div class="gm-content">'
+      + '<button type="button" class="gm-back" data-nav="list">' + icon('arrow-left') + ' Back to Sales</button>'
+      + '<h1 class="gm-h1">Sale details of ' + SALE.id + '</h1>'
+      + tabs + body
+      + '</div></div></div>';
+  }
+  function tabBtn(id, label) {
+    var act = state.detailTab === id;
+    return '<button type="button" class="gm-tab' + (act ? ' active' : '') + '" role="tab" aria-selected="' + act + '" data-tab="' + id + '">' + label + '</button>';
+  }
+
+  function detailsTab() {
+    return '<div class="gm-card"><div class="gm-card-head">' + icon('file-text') + '<div class="gm-h2">Sale summary</div></div>'
+      + '<div class="gm-kv-row">'
+      + '<div class="gm-kv"><b>Grain</b>' + SALE.grain + '</div>'
+      + '<div class="gm-kv"><b>Quantity</b>' + SALE.qty + '</div>'
+      + '<div class="gm-kv"><b>Final price</b>' + SALE.price + '</div>'
+      + '<div class="gm-kv"><b>Total</b>' + SALE.totalFmt + '</div>'
+      + '<div class="gm-kv"><b>Season</b>' + SALE.season + '</div>'
+      + '<div class="gm-kv"><b>Conveyance</b>' + SALE.conveyance + '</div>'
+      + '<div class="gm-kv"><b>Status</b>' + badge(state.trade.status) + '</div>'
+      + '</div></div>'
+      + '<div class="gm-card"><div class="gm-card-head">' + icon('users') + '<div class="gm-h2">Parties</div></div>'
+      + '<div class="gm-kv"><b>Seller / Farmer</b>Hargreaves Family Farms</div>'
+      + '<div class="gm-kv"><b>Buyer</b>Mitchell Grain Traders</div>'
+      + '<div class="gm-kv"><b>Escrow agent</b>Grain Marketplace Pty Ltd</div></div>'
+      + logCard();
+  }
+
+  function logCard() {
+    var items = state.trade.log.map(function (l) {
+      return '<div class="gm-log-item">' + icon(l.icon) + '<div><b>' + esc(l.t) + '</b> — <span style="color:var(--gm-muted)">' + esc(l.d) + '</span></div><span class="gm-time">' + l.time + '</span></div>';
+    }).join('');
+    return '<div class="gm-card"><div class="gm-card-head">' + icon('history') + '<div class="gm-h2">Activity log</div></div><div class="gm-log">' + items + '</div></div>';
+  }
+
+  function storageTab() {
+    var t = state.trade;
+    var rcti = t.storageFee === null
+      ? '<span class="gm-mini-badge warnc">Waiting on storage fee</span>'
+      : '<span class="gm-mini-badge okc">Ready</span>';
+    return '<div class="gm-panel"><div class="gm-panel-head">Transaction IDs</div><div class="gm-panel-body">'
+      + '<div class="gm-label">Seller (GrainX reference)</div>'
+      + (t.titleRef ? '<span class="gm-chip">' + esc(t.titleRef) + '</span>' : '<span class="gm-mini-badge gray" style="background:var(--gm-gray-bg);color:var(--gm-gray-fg)">Not submitted yet</span>')
+      + '<div class="gm-label" style="margin-top:12px">Buyer (payment reference)</div>'
+      + (t.paymentRef ? '<span class="gm-chip">' + esc(t.paymentRef) + '</span>' : '<span class="gm-mini-badge" style="background:var(--gm-gray-bg);color:var(--gm-gray-fg)">Not submitted yet</span>')
+      + '</div></div>'
+      + storageFeePanel()
+      + '<div class="gm-panel"><div class="gm-panel-head">RCTI</div><div class="gm-panel-body">'
+      + '<div class="gm-rcti-line"><span>RCTI status</span>' + rcti + '</div>'
+      + '<div class="gm-rcti-line"><span>Sale total</span><span class="tabular-nums">' + SALE.totalFmt + '</span></div>'
+      + '<div class="gm-rcti-line"><span>Accumulated storage fee (deducted from seller)</span><span class="tabular-nums">' + (t.storageFee === null ? '—' : fmtMoney(t.storageFee)) + '</span></div>'
+      + '</div></div>';
+  }
+
+  function storageFeePanel() {
+    var t = state.trade;
+    return '<div class="gm-panel"><div class="gm-panel-head">Accumulated storage fee</div><div class="gm-panel-body">'
+      + '<div class="gm-label">Storage fee (AUD)</div>'
+      + '<div class="gm-fee-row"><input id="gm-fee-input" inputmode="decimal" value="' + (t.storageFee === null ? '0.00' : Number(t.storageFee).toFixed(2)) + '" aria-label="Storage fee in AUD">'
+      + '<button type="button" class="gm-btn" data-act="save-fee">' + icon('save') + ' Save</button></div>'
+      + '<div class="gm-note">Deducted on the seller RCTI. Enter 0 if no storage fee applies — the RCTI stays blocked until a value is saved.</div>'
+      + '</div></div>';
+  }
+
+  /* ---------- transaction status tab (the core) ---------- */
+  function statusTab() {
+    var idx = STEP_INDEX[state.trade.status];
+    var steps = '';
+    STEPS.forEach(function (s, i) {
+      var cls = i < idx ? 'done' : i === idx ? 'active' : 'pending';
+      if (state.trade.status === 'COMPLETED') cls = 'done';
+      var dotInner = cls === 'done' ? icon('check') : '';
+      steps += '<div class="gm-step ' + cls + '"><div class="gm-step-dot">' + dotInner + '</div>'
+        + '<div class="gm-step-title">' + s.title + '</div><div class="gm-step-desc">' + s.desc + '</div></div>';
+    });
+
+    return '<div class="gm-tip">' + icon('info') + '<div>' + roleTip() + '</div></div>'
+      + '<div style="display:flex; gap:26px; flex-wrap:wrap; align-items:flex-start">'
+      + '<div style="flex:1; min-width:280px"><div class="gm-steps">' + steps + '</div></div>'
+      + '<div style="flex:1.15; min-width:300px">' + actionCards() + '</div>'
+      + '</div>'
+      + '<div style="max-width:640px">' + logCard() + '</div>';
+  }
+
+  function roleTip() {
+    var t = state.trade;
+    var map = {
+      'farmer|PENDING_TITLE_TRANSFER': 'Action needed: transfer the grain ownership to GrainX, then submit the reference number.',
+      'farmer|TITLE_UNDER_REVIEW': 'Waiting: the admin is manually validating your GrainX reference.',
+      'farmer|PENDING_PAYMENT': 'Waiting: the buyer is paying the RCTI. No action for you yet.',
+      'farmer|PAYMENT_UNDER_REVIEW': 'Waiting: the admin is verifying the buyer payment.',
+      'farmer|PAYMENT_RECEIVED': 'Action needed: admin received the money — confirm once it reaches your bank account.',
+      'farmer|COMPLETED': 'Trade completed. Payment received and confirmed.',
+      'buyer|PENDING_TITLE_TRANSFER': 'Locked: the farmer must transfer the title first — you cannot take any action yet.',
+      'buyer|TITLE_UNDER_REVIEW': 'Locked: the title transfer is being validated by admin.',
+      'buyer|PENDING_PAYMENT': t.storageFee === null
+        ? 'Waiting: the RCTI unlocks once admin saves the accumulated storage fee.'
+        : 'Action needed: the RCTI is ready — transfer the amount and submit the payment reference.',
+      'buyer|PAYMENT_UNDER_REVIEW': 'Waiting: admin received your payment request for check and is verifying it.',
+      'buyer|PAYMENT_RECEIVED': 'Done: admin verified your payment. Waiting for the farmer to confirm receipt.',
+      'buyer|COMPLETED': 'Trade completed.',
+      'admin|PENDING_TITLE_TRANSFER': 'Waiting: the farmer has not submitted the GrainX reference yet.',
+      'admin|TITLE_UNDER_REVIEW': 'Action needed: manually validate (or reject) the submitted GrainX reference.',
+      'admin|PENDING_PAYMENT': t.storageFee === null
+        ? 'Action needed: save the accumulated storage fee to unlock the buyer RCTI.'
+        : 'Waiting: storage fee saved and the buyer RCTI is unlocked — waiting for the buyer to pay.',
+      'admin|PAYMENT_UNDER_REVIEW': 'Action needed: request for check — verify the buyer payment and mark it received.',
+      'admin|PAYMENT_RECEIVED': 'Waiting: the farmer must confirm the payment receipt to complete the trade.',
+      'admin|COMPLETED': 'Trade completed and fully settled.'
+    };
+    return map[state.role + '|' + t.status];
+  }
+
+  function actionCards() {
+    var t = state.trade, r = state.role, h = '';
+
+    if (r === 'farmer') {
+      if (t.status === 'PENDING_TITLE_TRANSFER') {
+        if (t.titleRejection) {
+          h += '<div class="gm-card err"><div class="gm-card-head">' + icon('circle-x') + '<div class="gm-h2">Title transfer rejected by admin</div></div>'
+            + '<div>' + esc(t.titleRejection) + '</div><div class="gm-note">Re-submit a valid GrainX reference number below.</div></div>';
+        }
+        h += '<div class="gm-card"><div class="gm-card-head">' + icon('arrow-right-left') + '<div class="gm-h2">Transfer the grain ownership</div></div>'
+          + '<div class="gm-kv"><b>Trading name</b>GRAIN MARKETPLACE PTY LTD</div>'
+          + '<div class="gm-kv"><b>ABN</b>73 673 613 557</div>'
+          + '<div class="gm-note">Transfer the title in GrainX, then submit the reference number here.</div>'
+          + '<div class="gm-actions"><button type="button" class="gm-btn" data-act="open-ref-modal">Submit reference number ' + icon('arrow-right') + '</button></div></div>';
+      } else if (t.status === 'TITLE_UNDER_REVIEW') {
+        h += '<div class="gm-card warn"><div class="gm-card-head">' + icon('scan-search') + '<div class="gm-h2">Validating your title transfer</div></div>'
+          + '<div>GrainX reference <span class="gm-chip">' + esc(t.titleRef) + '</span> is being manually validated by the platform admin.</div></div>';
+      } else if (t.status === 'PENDING_PAYMENT') {
+        h += infoCard('clock', 'Waiting for the buyer payment', 'Title transfer is validated. The buyer will pay the RCTI — you will be notified when the admin receives the money.');
+      } else if (t.status === 'PAYMENT_UNDER_REVIEW') {
+        h += infoCard('scan-search', 'Admin is verifying the payment', 'The buyer transferred ' + SALE.totalFmt + '. Admin is running the request-for-check validation.');
+      } else if (t.status === 'PAYMENT_RECEIVED') {
+        h += '<div class="gm-card ok"><div class="gm-card-head">' + icon('wallet') + '<div class="gm-h2">Admin received the payment</div></div>'
+          + '<div>The buyer payment of <b>' + SALE.totalFmt + '</b> was verified and received by the platform (less storage fee and platform fee on your RCTI).</div>'
+          + '<div class="gm-actions"><button type="button" class="gm-btn" data-act="confirm-receipt">Confirm payment received ' + icon('check') + '</button></div></div>';
+      } else {
+        h += doneCard('Trade completed', 'You confirmed the payment. This trade is fully settled.');
+      }
+    }
+
+    if (r === 'buyer') {
+      if (t.status === 'PENDING_TITLE_TRANSFER' || t.status === 'TITLE_UNDER_REVIEW') {
+        h += '<div class="gm-card"><div class="gm-card-head">' + icon('lock') + '<div class="gm-h2">Waiting for the farmer</div></div>'
+          + '<div>The farmer must transfer the grain title to GrainX before anything can happen on your side. '
+          + (t.status === 'TITLE_UNDER_REVIEW' ? 'The submitted reference (' + esc(t.titleRef) + ') is being validated by admin.' : 'No action is available for you yet.')
+          + '</div></div>';
+      } else if (t.status === 'PENDING_PAYMENT') {
+        if (t.storageFee === null) {
+          h += infoCard('clock', 'RCTI is being prepared', 'Admin is adding the accumulated storage fee. Your RCTI and amount payable will appear here.');
+        } else {
+          h += '<div class="gm-card"><div class="gm-card-head">' + icon('receipt-text') + '<div class="gm-h2">RCTI — pay your invoice</div></div>'
+            + '<div class="gm-rcti-line"><span>Sale total (' + SALE.qty + ' × ' + SALE.price + ')</span><span class="tabular-nums">' + SALE.totalFmt + '</span></div>'
+            + '<div class="gm-rcti-line"><span>Accumulated storage fee</span><span class="tabular-nums">deducted from seller</span></div>'
+            + '<div class="gm-rcti-line total"><span>Amount payable</span><span class="tabular-nums">' + SALE.totalFmt + '</span></div>'
+            + '<div class="gm-actions"><button type="button" class="gm-btn" data-act="open-pay-modal">Transfer &amp; submit payment reference ' + icon('arrow-right') + '</button></div></div>';
+        }
+      } else if (t.status === 'PAYMENT_UNDER_REVIEW') {
+        h += infoCard('scan-search', 'Verifying your payment', 'You submitted reference ' + esc(t.paymentRef) + '. Admin is checking the received amount (request for check).');
+      } else if (t.status === 'PAYMENT_RECEIVED') {
+        h += infoCard('badge-check', 'Payment verified', 'Admin confirmed receipt of ' + SALE.totalFmt + '. The trade completes when the farmer confirms the money arrived.');
+      } else {
+        h += doneCard('Trade completed', 'Your payment was verified and the farmer was paid.');
+      }
+    }
+
+    if (r === 'admin') {
+      if (t.status === 'PENDING_TITLE_TRANSFER') {
+        h += infoCard('clock', 'Waiting for the farmer', 'The farmer must transfer the grain ownership in GrainX and submit the reference number. Buyer actions are locked until then.');
+      } else if (t.status === 'TITLE_UNDER_REVIEW') {
+        h += '<div class="gm-card"><div class="gm-card-head">' + icon('scan-search') + '<div class="gm-h2">Validate title transfer</div></div>'
+          + '<div>Farmer submitted the GrainX reference <span class="gm-chip">' + esc(t.titleRef) + '</span>. Check it in GrainX, then validate or reject.</div>'
+          + '<div class="gm-actions">'
+          + '<button type="button" class="gm-btn" data-act="validate-title">' + icon('badge-check') + ' Validate title transfer</button>'
+          + '<button type="button" class="gm-btn gm-btn-danger" data-act="open-reject-modal">' + icon('circle-x') + ' Reject</button>'
+          + '</div></div>';
+      } else if (t.status === 'PENDING_PAYMENT') {
+        h += '<div class="gm-card warn"><div class="gm-card-head">' + icon('hand-coins') + '<div class="gm-h2">Unlock the buyer RCTI</div></div>'
+          + '<div>The title transfer is validated. Save the accumulated storage fee (image-wise) so the buyer RCTI and amount payable appear.</div></div>'
+          + storageTab();
+      } else if (t.status === 'PAYMENT_UNDER_REVIEW') {
+        h += '<div class="gm-card"><div class="gm-card-head">' + icon('banknote') + '<div class="gm-h2">Request for check</div></div>'
+          + '<div class="gm-kv"><b>Amount</b>' + SALE.totalFmt + '</div>'
+          + '<div class="gm-kv"><b>Buyer reference</b><span class="gm-chip">' + esc(t.paymentRef) + '</span></div>'
+          + '<div class="gm-note">The buyer transferred the money. Verify the amount landed in the platform account, then mark it received.</div>'
+          + '<div class="gm-actions"><button type="button" class="gm-btn" data-act="verify-payment">' + icon('badge-check') + ' Verify &amp; mark received</button></div></div>';
+      } else if (t.status === 'PAYMENT_RECEIVED') {
+        h += infoCard('clock', 'Waiting for the farmer to confirm', 'Payment marked as received. The trade completes when the farmer confirms the money reached their account.');
+      } else {
+        h += doneCard('Trade completed', 'Title transferred, payment verified and received by the farmer.');
+      }
+    }
+    return h;
+  }
+
+  function infoCard(ic, title, body) {
+    return '<div class="gm-card"><div class="gm-card-head">' + icon(ic) + '<div class="gm-h2">' + title + '</div></div><div>' + body + '</div></div>';
+  }
+  function doneCard(title, body) {
+    return '<div class="gm-card ok"><div class="gm-card-head">' + icon('party-popper') + '<div class="gm-h2">' + title + '</div></div><div>' + body + '</div></div>';
+  }
+
+  /* ---------- flow map ---------- */
+  function flowView() {
+    function node(status, actor) {
+      return '<div class="gm-flow-node">' + badge(status) + '<div><div class="gm-h2" style="margin:0">' + STATUS[status].label + '</div><div class="gm-flow-actor">' + actor + '</div></div></div>';
+    }
+    function arrow(txt) { return '<div class="gm-flow-arrow">' + icon('arrow-down') + txt + '</div>'; }
+    return '<div class="gm-content"><h1 class="gm-h1">Trade lifecycle — flow map</h1>'
+      + '<div class="gm-tip">' + icon('bell-ring') + '<div>Every arrow is a transition: the platform sends a <b>push notification + in-app notification</b> to the affected side. Clicking the notification opens the <b>Transaction Status</b> tab of the sale, where the next action is always inline.</div></div>'
+      + '<div class="gm-flow">'
+      + '<div class="gm-flow-node"><span class="gm-badge green">Order Confirmed</span><div><div class="gm-h2" style="margin:0">Farmer &amp; buyer matched</div><div class="gm-flow-actor"><b>Platform</b> — order locked in, both sides notified, status becomes Pending Title Transfer.</div></div></div>'
+      + arrow('Both sides see <b>Pending Title Transfer</b>. Buyer actions are locked.')
+      + node('PENDING_TITLE_TRANSFER', '<b>Farmer</b> — transfers the grain title to GrainX, then submits the reference number.')
+      + arrow('Reference submitted → admin is notified.')
+      + node('TITLE_UNDER_REVIEW', '<b>Admin</b> — manually checks the GrainX reference, then validates or rejects.')
+      + '<div class="gm-flow-reject">' + icon('undo-2') + 'Rejected → back to Pending Title Transfer with a reason; the farmer re-submits.</div>'
+      + arrow('Validated → both sides move to Pending Payment.')
+      + node('PENDING_PAYMENT', '<b>Admin</b> — saves the accumulated storage fee (image-wise), which unlocks the RCTI. <b>Buyer</b> — sees the amount payable, transfers the money and submits the payment reference.')
+      + arrow('Payment reference submitted → admin gets a request for check.')
+      + node('PAYMENT_UNDER_REVIEW', '<b>Admin</b> — verifies the received money, then marks the payment as received.')
+      + arrow('Payment verified → farmer is notified that admin received the money.')
+      + node('PAYMENT_RECEIVED', '<b>Farmer</b> — confirms the payment arrived in their bank account.')
+      + arrow('Farmer confirms receipt.')
+      + node('COMPLETED', '<b>Trade completed</b> — title transferred, storage fee deducted on the seller RCTI, payment settled.')
+      + '</div>'
+      + '<div style="margin-top:18px"><button type="button" class="gm-btn gm-btn-ghost" data-nav="list">' + icon('arrow-left') + ' Back to Sales</button></div>'
+      + '</div>';
+  }
+
+  /* ---------- modals ---------- */
+  function openModal(html) {
+    document.getElementById('gm-modal').innerHTML = html;
+    document.getElementById('gm-overlay').hidden = false;
+    if (window.lucide) lucide.createIcons({ attrs: { width: 16, height: 16 } });
+    var inp = document.getElementById('gm-modal').querySelector('input, textarea');
+    if (inp) inp.focus();
+  }
+  function closeModal() { document.getElementById('gm-overlay').hidden = true; }
+
+  function refModal() {
+    openModal('<h3>Submit GrainX reference number</h3>'
+      + '<div class="gm-note">Enter the reference from your GrainX title transfer to GRAIN MARKETPLACE PTY LTD (ABN 73 673 613 557).</div>'
+      + '<label for="gm-ref-input">Reference number</label><input id="gm-ref-input" placeholder="e.g. GRX-88312">'
+      + '<div class="gm-actions"><button type="button" class="gm-btn" data-act="submit-ref">Submit</button>'
+      + '<button type="button" class="gm-btn gm-btn-ghost" data-act="close-modal">Cancel</button></div>');
+  }
+  function payModal() {
+    openModal('<h3>Transfer &amp; submit payment</h3>'
+      + '<div class="gm-note">RCTI for ' + SALE.id + ' — transfer the exact amount to the platform account, then submit the transfer reference.</div>'
+      + '<div class="gm-rcti-line"><span>Amount payable</span><span class="tabular-nums"><b>' + SALE.totalFmt + '</b></span></div>'
+      + '<label for="gm-pay-input">Payment / transfer reference</label><input id="gm-pay-input" placeholder="e.g. TRF-204881">'
+      + '<div class="gm-actions"><button type="button" class="gm-btn" data-act="submit-pay">Submit payment reference</button>'
+      + '<button type="button" class="gm-btn gm-btn-ghost" data-act="close-modal">Cancel</button></div>');
+  }
+  function rejectModal() {
+    openModal('<h3>Reject title transfer</h3>'
+      + '<div class="gm-note">Tell the farmer why the GrainX reference was rejected. The trade returns to Pending Title Transfer.</div>'
+      + '<label for="gm-reason-input">Reason</label><textarea id="gm-reason-input" rows="3" placeholder="e.g. Reference does not match the GrainX transfer record."></textarea>'
+      + '<div class="gm-actions"><button type="button" class="gm-btn gm-btn-danger" data-act="submit-reject">Reject &amp; notify farmer</button>'
+      + '<button type="button" class="gm-btn gm-btn-ghost" data-act="close-modal">Cancel</button></div>');
+  }
+
+  /* ---------- events ---------- */
+  app.addEventListener('click', function (e) {
+    var el = e.target.closest('[data-role], [data-nav], [data-tab], [data-act], [data-open], #gm-bell, #gm-reset');
+    if (!el) {
+      if (!e.target.closest('#gm-notif-pop') && state.notifOpen) { state.notifOpen = false; renderNotifPop(); }
+      return;
+    }
+    if (el.id === 'gm-bell') {
+      state.notifOpen = !state.notifOpen;
+      if (state.notifOpen) { state.lastRead[state.role] = state.notifId; persist(); }
+      render();
+      return;
+    }
+    if (el.id === 'gm-reset') { actions.reset(); toast('Demo reset', 'TRD0495 is back to Pending Title Transfer.'); return; }
+    var role = el.getAttribute('data-role');
+    if (role) { state.role = role; state.view = 'list'; state.notifOpen = false; persist(); render(); return; }
+    var nav = el.getAttribute('data-nav');
+    if (nav) { state.view = nav; state.detailTab = 'status'; state.notifOpen = false; persist(); render(); return; }
+    var tab = el.getAttribute('data-tab');
+    if (tab) { state.detailTab = tab; render(); return; }
+    if (el.hasAttribute('data-open')) { state.view = 'detail'; state.detailTab = 'status'; persist(); render(); return; }
+
+    var act = el.getAttribute('data-act');
+    if (!act) return;
+    if (act === 'close-modal') { closeModal(); return; }
+    if (act === 'open-ref-modal') { refModal(); return; }
+    if (act === 'open-pay-modal') { payModal(); return; }
+    if (act === 'open-reject-modal') { rejectModal(); return; }
+    if (act === 'submit-ref') {
+      var v = document.getElementById('gm-ref-input').value.trim();
+      if (!v) { document.getElementById('gm-ref-input').focus(); return; }
+      closeModal(); actions.submitTitleRef(v); return;
+    }
+    if (act === 'submit-pay') {
+      var p = document.getElementById('gm-pay-input').value.trim();
+      if (!p) { document.getElementById('gm-pay-input').focus(); return; }
+      closeModal(); actions.submitPayment(p); return;
+    }
+    if (act === 'submit-reject') {
+      var rr = document.getElementById('gm-reason-input').value.trim() || 'GrainX reference could not be verified.';
+      closeModal(); actions.rejectTitle(rr); return;
+    }
+    if (act === 'validate-title') { actions.validateTitle(); return; }
+    if (act === 'verify-payment') { actions.verifyPayment(); return; }
+    if (act === 'confirm-receipt') { actions.confirmReceipt(); return; }
+    if (act === 'save-fee') {
+      var raw = document.getElementById('gm-fee-input').value.replace(/[^0-9.]/g, '');
+      var fee = parseFloat(raw);
+      if (isNaN(fee) || fee < 0) { document.getElementById('gm-fee-input').focus(); return; }
+      actions.saveStorageFee(fee); return;
+    }
+  });
+
+  render();
+})();
+</script>
+
+</body>
+</html>
